@@ -1,0 +1,235 @@
+package za.ac.cput.networkingprac3clientside;
+
+import za.ac.cput.domain.Student;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
+
+public class StudentRecordClient implements ActionListener{
+    private static ObjectInputStream in;
+    private static ObjectOutputStream out;
+    private static JFrame frame;
+    private static JTextField nameField;
+    private static JTextField idField;
+    private static JTextField scoreField, searchField;
+    private static JLabel nameLabel, idLabel, scoreLabel, searchLabel;
+    private static JTextArea recordsTextArea;
+    private static JButton addButton, searchButton, deleteButton;
+    private static JButton retrieveButton;
+    private static JButton exitButton;
+    private static Socket socket;   //step 1
+
+// Connect to the server, create io streams, and call the method that defines the gui
+        public StudentRecordClient(){
+            try{
+                socket = new Socket("127.0.0.1", 12345);        //step 1
+                in = new ObjectInputStream(socket.getInputStream());    //step 2
+                out = new ObjectOutputStream(socket.getOutputStream());     //step 2
+                createAndShowGUI();     //here we call the gui
+            }catch(UnknownHostException uhe){
+                JOptionPane.showMessageDialog(null, "Error while trying to connect to the server: " + uhe.getMessage());
+            }catch(IOException ioe){
+                JOptionPane.showMessageDialog(null, "IOException while trying to connect to the server");
+            }
+    }//end constructor
+
+//------------------------------------------------------------------------------    
+
+//Create the swing-based gui
+    private void createAndShowGUI() {
+        frame = new JFrame();
+        
+        JPanel panelNorth = new JPanel();
+        panelNorth.setPreferredSize(new Dimension(30, 60));
+        JPanel panelSouth = new JPanel();
+        
+        nameField = new JTextField(20);
+        idField = new JTextField(20);
+        scoreField = new JTextField(20);
+        searchField = new JTextField(20);
+        
+        nameLabel = new JLabel("Name: ");
+        idLabel = new JLabel("ID: ");
+        scoreLabel = new JLabel("Score: ");
+        searchLabel = new JLabel("Search: ");
+        
+        recordsTextArea = new JTextArea(20, 45);
+        
+        addButton = new JButton("Add Record");
+        searchButton = new JButton("Search");
+        deleteButton = new JButton("Delete");
+        retrieveButton = new JButton("Retrieve Records");
+        exitButton = new JButton("Exit");
+        
+        panelNorth.add(nameLabel);
+        panelNorth.add(nameField);
+        panelNorth.add(idLabel);
+        panelNorth.add(idField);
+        panelNorth.add(scoreLabel);
+        panelNorth.add(scoreField);
+        panelNorth.add(searchLabel);
+        panelNorth.add(searchField);
+        panelNorth.add(searchButton);
+        panelNorth.add(addButton);
+        panelNorth.add(retrieveButton);
+        panelNorth.add(deleteButton);
+        panelNorth.add(exitButton);
+        panelSouth.add(recordsTextArea);
+        
+        frame.add(panelNorth, BorderLayout.NORTH);
+        frame.add(panelSouth, BorderLayout.SOUTH);
+        
+        addButton.addActionListener(this);
+        retrieveButton.addActionListener(this);
+        exitButton.addActionListener(this);
+        searchButton.addActionListener(this);
+        deleteButton.addActionListener(this);
+        
+        frame.setSize(600, 600);
+        frame.setVisible(true);
+        frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
+    }//end createAndShowGUI()
+
+//------------------------------------------------------------------------------    
+    //step 3: Processing
+// In this method, construct a Student object that is initialized with the values entered by the user on the gui.   
+// Send the object to the server.
+// Clear the textfields and place the cursor in the name textfield    
+    private static void addStudentRecord() {
+        Student student = new Student(nameField.getText(), idField.getText(), scoreField.getText());
+        Object objectStudent = student;     //we are sending type Object to the server. The server will check if it is an instance of Student
+        //make sure your worker class is serializable
+        
+        try{
+            //System.out.println(String.valueOf(student.getStudentName()));
+            out.writeObject(objectStudent);
+            out.flush();
+            nameField.setText("");
+            idField.setText("");
+            scoreField.setText("");
+            nameField.requestFocus();       //these 4 lines can be placed in their own method
+        }catch(IOException ioe){
+            JOptionPane.showMessageDialog(null,"IOException at addStudentRecord");
+        }
+    }//end addStudentRecord()
+
+//------------------------------------------------------------------------------    
+//part of step 3
+// In this method, send a string to the server that indicates a retrieve request.
+// Read the Arraylist Object sent from the server, and call the method to display the student records.
+    private static void retrieveStudentRecords() {
+        try{
+            //we prepeare the below ArrayList to hold what the server sends back to the client
+        ArrayList <Student> readFromServer = new ArrayList<>();
+        out.writeObject("Retrieve Records");        //sending retrieve request tot he server
+        out.flush();
+        readFromServer = (ArrayList)in.readObject();    //we are adding the ArrayList sent from the server into the readFromServer ArrayList
+        displayStudentRecords(readFromServer);      //calling the display method with our ArrayList as parameter
+        }catch(IOException ioe){
+            JOptionPane.showMessageDialog(null,"IOException at retrieveStudentRecords");
+        }catch(ClassNotFoundException cnf){
+            JOptionPane.showMessageDialog(null, "ClassNotFoundException at retrieveStudentRecords");
+        }
+    }//end retrieveStudentRecords()
+
+    private static void deleteStudent(){
+        try{
+            String send = (String)nameField.getText()+"1";
+            System.out.println("Sending: " + send);
+            out.writeObject(send);
+            out.flush();
+            String readFromServer = (String)in.readObject();
+            recordsTextArea.setText("");
+            recordsTextArea.append(readFromServer);
+        }catch(IOException ioe){
+            System.out.println(ioe.getMessage());
+        }catch(ClassNotFoundException cnf){
+            System.out.println(cnf.getMessage());
+        }
+    }
+    
+    private static void search(){
+        try{
+            String query = searchField.getText();
+            ArrayList <Student> readFromServer = new ArrayList<>();
+            out.writeObject(query);
+            out.flush();
+            System.out.println("Query sent");
+            readFromServer = (ArrayList)in.readObject();
+            System.out.println("results received");
+            displayStudentRecords(readFromServer);
+        } catch (IOException ex) {
+            System.out.println(ex.getMessage());
+        } catch (ClassNotFoundException ex) {
+            System.out.println(ex.getMessage());
+        }
+    }
+    
+//------------------------------------------------------------------------------    
+
+//part of step 3
+// In this method, you must append the records in the arraylist (sent as a parameter) in the textarea.
+    private static void displayStudentRecords(List<Student> studentList) {
+        recordsTextArea.setText("");    //we are clearing the textArea before it is appended to
+        System.out.println("Text cleared");
+        for(int i = 0; i < studentList.size(); i++){    //use a for loop to get all the student object from the array
+            System.out.println("message printed");
+            recordsTextArea.append(String.valueOf(studentList.get(i)));     //the worker class must have a toString method to display arrayList contents properly
+        }
+    }//end displayStudentRecords()
+
+//------------------------------------------------------------------------------    
+
+// Send a string value to the server indicating an exit request. 
+// Read the returning string from the server
+// Close all connections and exit the application    
+    private static void closeConnection() {     //step 4
+        try{
+            out.writeObject("Exit");
+            out.flush();
+//            String msg = (String)in.readObject();
+//            recordsTextArea.append(msg);
+            out.close();
+            in.close();
+            socket.close();
+        }catch(IOException ioe){
+            JOptionPane.showMessageDialog(null, "Exception while attempting to close connections");
+        }/*catch(ClassNotFoundException cnf){
+            JOptionPane.showMessageDialog(null, "Exception while attempting to close connections");
+        }*/
+    }//end closeConnection()
+
+//------------------------------------------------------------------------------    
+
+// Handle all action events generated by the user-interaction with the buttons
+    public void actionPerformed(ActionEvent e)
+    {
+        if(e.getActionCommand().equals("Add Record")){
+            addStudentRecord();
+        }else if(e.getActionCommand().equals("Retrieve Records")){
+            retrieveStudentRecords();
+        }else if(e.getActionCommand().equals("Search")){
+            search();
+        }else if(e.getActionCommand().equals("Delete")){
+            deleteStudent();
+        }else if(e.getActionCommand().equals("Exit")){
+            closeConnection();
+            System.exit(0);
+        }
+    }//end actionPerformed
+
+//------------------------------------------------------------------------------    
+
+// Execute the application by calling the necessary methods   
+    public static void main(String[] args) {
+        StudentRecordClient gui = new StudentRecordClient();
+    }//end main
+}//end class
+
