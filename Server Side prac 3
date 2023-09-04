@@ -1,0 +1,129 @@
+package za.ac.cput.networkingprac3;
+
+import za.ac.cput.domain.Student;
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class StudentRecordServer {
+    private static ObjectOutputStream out;
+    private static ObjectInputStream in;
+    private static ServerSocket serverSocket;
+    private static Socket clientSocket;     //along with step 2
+    private static Object receivedObject;
+
+//In the constructor listen for incoming client connections    
+public StudentRecordServer(){
+    try{
+    serverSocket = new ServerSocket(12345, 1);      //step 1
+    System.out.println("Server is listening...");
+    clientSocket = serverSocket.accept();       //step 2
+    System.out.println(clientSocket.getInetAddress() + " has connected");
+    getStreams();
+    processClient();
+    }catch(IOException ioe){
+        System.out.println("IOException whilelistening for connections: " + ioe.getMessage());
+    }
+}//end constructor
+
+//------------------------------------------------------------------------------    
+    
+//create the io streams
+public void getStreams(){       //step 3: uses socket object
+    try{
+    out = new ObjectOutputStream(clientSocket.getOutputStream());
+    out.flush();
+    in = new ObjectInputStream(clientSocket.getInputStream());
+    }catch(IOException ioe){
+        System.out.println("IOException at getStreams: " + ioe.getMessage());
+    }
+    
+}//end getStreams()
+
+//------------------------------------------------------------------------------    
+    
+//Declare arraylist and handle the communication between server and client    
+    public void processClient() {       //step 4
+        ArrayList <Student> studentArray = new ArrayList<>();
+        
+        try{
+        while(true){
+            System.out.println("reading input");
+            receivedObject = in.readObject();
+            //if you are retrieving an object from the client, make sure the worker class is Serializable
+            //String msg = (String)in.readObject();     can read in Strings or other primitive types
+            System.out.println("Object received");
+        if(receivedObject instanceof Student){      //checking the instance of the received object
+            System.out.println("checking instance");
+            Student newStudent = (Student)receivedObject;       //if true, we cast the object to the type it was received as
+            System.out.println("new student created");
+            studentArray.add(newStudent);       // here we add the Studdent object to the ArrayList
+            }else if(receivedObject instanceof String && ((String)receivedObject).equalsIgnoreCase("Retrieve Records")){
+                ArrayList studentList = (ArrayList)studentArray.clone();
+                out.writeObject(studentList);       // here we are sending the studentArray to the client
+                out.flush();        //make sure to flush your output object
+            }else if(receivedObject instanceof String && ((String)receivedObject).equalsIgnoreCase("exit")){
+                closeConnection();      //calls method to close connections
+            }else /*(receivedObject instanceof String && ((String) receivedObject).equals("search"))*/{
+                
+                String query = (String)receivedObject;
+                ArrayList <Student> searchResults = new ArrayList<>();
+                
+                if(query.contains("1")){
+                    query = query.substring(0, query.length()-1);
+                    System.out.println(query);
+                for(int j = 0; j < studentArray.size(); j++){
+                    if(studentArray.get(j).getStudentName().equalsIgnoreCase(query)){
+                        studentArray.remove(j);
+                        System.out.println("Student deleted!");
+                    }
+                }
+                out.writeObject("Student deleted!");
+                out.flush();
+            }else{
+                    for(int i = 0; i < studentArray.size(); i++){
+                    if ((studentArray.get(i).getStudentName().equals(query)) || (studentArray.get(i).getStudentNumber().equals(query))){
+                        System.out.println("search result added");
+                        searchResults.add(studentArray.get(i));
+                    }
+                }
+                ArrayList sendResult = (ArrayList)searchResults.clone();
+                    out.writeObject(sendResult);
+                    System.out.println("search results sent");
+                        out.flush();
+            }
+            }
+        }
+        }catch(IOException ioe){
+                System.out.println("IOException at processClient: " + ioe.getMessage());
+            }catch(ClassNotFoundException cnf){
+                System.out.println("CNF exception at processCleint server side: " + cnf.getMessage());
+            }
+        
+        
+    }//end processClient
+
+//------------------------------------------------------------------------------    
+
+//close all connections to the server and exit the application   
+    private static void closeConnection() {     //step 5
+        try{
+            out.close();
+            in.close();
+            clientSocket.close();
+            serverSocket.close();
+        }catch(IOException ioe){
+            System.out.println("IOException at closeConnetion: " + ioe.getMessage());
+        }
+    }//end closeConnection()
+
+//------------------------------------------------------------------------------    
+
+//execute the program and call all necessary methods
+    public static void main(String[] args) {
+    StudentRecordServer server = new StudentRecordServer();
+    }//end main
+
+}//end class
+
